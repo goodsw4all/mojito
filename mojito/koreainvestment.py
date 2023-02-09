@@ -14,6 +14,7 @@ import pandas as pd
 import websockets
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
+import time
 
 EXCHANGE_CODE = {
     "홍콩": "HKS",
@@ -383,7 +384,7 @@ class KoreaInvestment:
         resp_data['api_secret'] = self.api_secret
 
         # dump access token
-        with open("token.dat", "wb") as f:
+        with open("./secrets/token.dat", "wb") as f:
             pickle.dump(resp_data, f)
 
     def check_access_token(self):
@@ -393,7 +394,7 @@ class KoreaInvestment:
             Bool: True: token is valid, False: token is not valid
         """
         try:
-            f = open("token.dat", "rb")
+            f = open("./secrets/token.dat", "rb")
             data = pickle.load(f)
             f.close()
 
@@ -414,7 +415,7 @@ class KoreaInvestment:
     def load_access_token(self):
         """load access token
         """
-        with open("token.dat", "rb") as f:
+        with open("./secrets/token.dat", "rb") as f:
             data = pickle.load(f)
             self.access_token = f'Bearer {data["access_token"]}'
 
@@ -528,8 +529,10 @@ class KoreaInvestment:
 
         result['output1'] = output['output1']
         result['output2'] = output2
-
+        
+        count = 1
         while last_hour > "090100":
+            
             # last minute
             dt1 = datetime.datetime(
                 year=now.year,
@@ -537,7 +540,7 @@ class KoreaInvestment:
                 day=now.day,
                 hour=int(last_hour[:2]),
                 minute=int(last_hour[2:4])
-            )
+            )            
             delta = datetime.timedelta(minutes=1)
 
             # 1 minute ago
@@ -546,10 +549,13 @@ class KoreaInvestment:
 
             # request 1minute ohlcv
             output = self._fetch_today_1m_ohlcv(symbol, to)
+            count += 1
+            if "output2" not in output:
+                print(count, output)                
+                break
             output2 = output['output2']
-            last_hour = output2[-1]['stck_cntg_hour']
-
-            result['output2'].extend(output2)
+            last_hour = output2[-1]['stck_cntg_hour']            
+            result['output2'].extend(output2)            
 
         return result
 
@@ -576,7 +582,7 @@ class KoreaInvestment:
             "fid_cond_mrkt_div_code": "J",
             "fid_input_iscd": symbol,
             "fid_input_hour_1": to,
-            "fid_pw_data_incu_yn": "Y"
+            "fid_pw_data_incu_yn": "N"
         }
         res = requests.get(url, headers=headers, params=params)
         return res.json()
