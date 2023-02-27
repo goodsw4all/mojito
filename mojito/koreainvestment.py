@@ -245,6 +245,7 @@ class KoreaInvestmentWS(Process):
                         self.parse_orderbook(tokens[3])
                 elif data[0] == '1':
                     tokens = data.split('|')
+                    # 국내주식 실시간체결통보[실시간-005]
                     if tokens[1] == "H0STCNI0":
                         self.parse_notice(tokens[3])
                 else:
@@ -529,10 +530,10 @@ class KoreaInvestment:
 
         result['output1'] = output['output1']
         result['output2'] = output2
-        
+
         count = 1
         while last_hour > "090100":
-            
+
             # last minute
             dt1 = datetime.datetime(
                 year=now.year,
@@ -540,7 +541,7 @@ class KoreaInvestment:
                 day=now.day,
                 hour=int(last_hour[:2]),
                 minute=int(last_hour[2:4])
-            )            
+            )
             delta = datetime.timedelta(minutes=1)
 
             # 1 minute ago
@@ -551,11 +552,11 @@ class KoreaInvestment:
             output = self._fetch_today_1m_ohlcv(symbol, to)
             count += 1
             if "output2" not in output:
-                print(count, output)                
+                print(count, output)
                 break
             output2 = output['output2']
-            last_hour = output2[-1]['stck_cntg_hour']            
-            result['output2'].extend(output2)            
+            last_hour = output2[-1]['stck_cntg_hour']
+            result['output2'].extend(output2)
 
         return result
 
@@ -1317,6 +1318,48 @@ class KoreaInvestment:
             "CTX_AREA_NK100": nk100,
             "INQR_DVSN_1": type1,
             "INQR_DVSN_2": type2
+        }
+
+        resp = requests.get(url, headers=headers, params=params)
+        return resp.json()
+
+    # 주식일별주문체결조회[v1_국내주식-005]
+    def fetch_trade_list(self, ticker):
+        """주식 정정/취소가능 주문 조회
+        Args:
+            param (dict): 세부 파라미터
+        Returns:
+            _type_: _description_
+        """
+        path = "uapi/domestic-stock/v1/trading/inquire-daily-ccld"
+        url = f"{self.base_url}/{path}"
+
+        headers = {
+           "content-type": "application/json",
+           "authorization": self.access_token,
+           "appKey": self.api_key,
+           "appSecret": self.api_secret,
+           "tr_id": "TTTC8001R"
+        }
+        today = datetime.datetime.today().strftime("%Y%m%d")
+        since = (datetime.datetime.today() - datetime.timedelta(weeks=12)).strftime(
+            "%Y%m%d"
+        )
+        params = {
+            "CANO": self.acc_no_prefix,
+            "ACNT_PRDT_CD": self.acc_no_postfix,
+            "INQR_STRT_DT": since,
+            "INQR_END_DT": today,
+            "SLL_BUY_DVSN_CD": "02",
+            "PDNO": ticker,
+            "INQR_DVSN": "00",
+            "CCLD_DVSN": "01",
+            "ORD_GNO_BRNO": "",
+            "ODNO": "",
+            "INQR_DVSN_3": "00",
+            "INQR_DVSN_1":"",
+            "CTX_AREA_FK100":"",
+            "CTX_AREA_NK100":"",
         }
 
         resp = requests.get(url, headers=headers, params=params)
