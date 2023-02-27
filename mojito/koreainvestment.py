@@ -188,6 +188,7 @@ class KoreaInvestmentWS(Process):
         self.aes_key = None
         self.aes_iv = None
         self.queue = Queue()
+        self.base_url = "https://openapi.koreainvestment.com:9443"
 
     def run(self):
         """_summary_
@@ -199,22 +200,23 @@ class KoreaInvestmentWS(Process):
         """
         uri = "ws://ops.koreainvestment.com:21000"
 
+        approval_key = self.get_approval()
+
         async with websockets.connect(uri, ping_interval=None) as websocket:
             header = {
-                "appKey": self.api_key,
-                "appSecret": self.api_secret,
+                "approval_key": approval_key,
+                "personalseckey": "1",
                 "custtype": "P",
                 "tr_type": "1",
-                "content": "utf-8"
-            }
-            body = {
-                "tr_id": None,
-                "tr_key": None,
+                "content-type": "utf-8"
             }
             fmt = {
                 "header": header,
                 "body": {
-                    "input": body
+                    "input": {
+                        "tr_id": None,
+                        "tr_key": None,
+                    }
                 }
             }
 
@@ -263,6 +265,21 @@ class KoreaInvestmentWS(Process):
 
                     elif tr_id == "PINGPONG":
                         await websocket.send(data)
+
+    def get_approval(self) -> str:
+        """실시간 (웹소켓) 접속키 발급
+
+        Returns:
+            str: 웹소켓 접속키
+        """
+        headers = {"content-type": "application/json"}
+        body = {"grant_type": "client_credentials",
+                "appkey": self.api_key,
+                "secretkey": self.api_secret}
+        PATH = "oauth2/Approval"
+        URL = f"{self.base_url}/{PATH}"
+        res = requests.post(URL, headers=headers, data=json.dumps(body))
+        return res.json()["approval_key"]
 
     def aes_cbc_base64_dec(self, cipher_text: str):
         """_summary_
@@ -588,20 +605,22 @@ class KoreaInvestment:
         res = requests.get(url, headers=headers, params=params)
         return res.json()
 
-    def fetch_ohlcv(self, symbol: str, timeframe: str = 'D', since:str="",
+    def fetch_ohlcv(self, symbol: str, timeframe: str = 'D', start_day:str="", end_day:str="",
                     adj_price: bool = True) -> dict:
         """fetch OHLCV (day, week, month)
         Args:
             symbol (str): 종목코드
             timeframe (str): "D" (일), "W" (주), "M" (월)
+            start_day (str): 조회시작일자
+            end_day (str): 조회종료일자
             adj_price (bool, optional): True: 수정주가 반영, False: 수정주가 미반영. Defaults to True.
         Returns:
             dict: _description_
         """
         if self.exchange == '서울':
-            resp = self.fetch_ohlcv_domestic(symbol, timeframe, since, adj_price)
+            resp = self.fetch_ohlcv_domestic(symbol, timeframe, start_day, end_day, adj_price)
         else:
-            resp = self.fetch_ohlcv_overesea(symbol, timeframe, since, adj_price)
+            resp = self.fetch_ohlcv_overesea(symbol, timeframe, end_day, adj_price)
         return resp
 
     def fetch_ohlcv_recent30(self, symbol: str, timeframe: str = 'D', adj_price: bool = True) -> dict:
@@ -1387,28 +1406,28 @@ class KoreaInvestment:
             if self.exchange in ["나스닥", "뉴욕", "아멕스"]:
                 tr_id = "VTTT1002U" if side == "buy" else "VTTT1002U"
             elif self.exchange == '도쿄':
-                tr_id = "VTTT1002U" if side == "buy" else "VTTT1002U"
+                tr_id = "VTTS0308U" if side == "buy" else "VTTS0307U"
             elif self.exchange == '상해':
-                tr_id = "VTTT1002U" if side == "buy" else "VTTT1002U"
+                tr_id = "VTTS0202U" if side == "buy" else "VTTS1005U"
             elif self.exchange == '홍콩':
-                tr_id = "VTTT1002U" if side == "buy" else "VTTT1002U"
+                tr_id = "VTTS1002U" if side == "buy" else "VTTS1001U"
             elif self.exchange == '심천':
-                tr_id = "VTTT1002U" if side == "buy" else "VTTT1002U"
+                tr_id = "VTTS0305U" if side == "buy" else "VTTS0304U"
             else:
-                tr_id = "VTTT1002U" if side == "buy" else "VTTT1002U"
+                tr_id = "VTTS0311U" if side == "buy" else "VTTS0310U"
         else:
             if self.exchange in ["나스닥", "뉴욕", "아멕스"]:
                 tr_id = "JTTT1002U" if side == "buy" else "JTTT1006U"
             elif self.exchange == '도쿄':
-                tr_id = "TTTS0308U" if side == "buy" else "TTTS0308U"
+                tr_id = "TTTS0308U" if side == "buy" else "TTTS0307U"
             elif self.exchange == '상해':
-                tr_id = "TTTS0202U" if side == "buy" else "TTTS0202U"
+                tr_id = "TTTS0202U" if side == "buy" else "TTTS1005U"
             elif self.exchange == '홍콩':
-                tr_id = "TTTS1002U" if side == "buy" else "TTTS1002U"
+                tr_id = "TTTS1002U" if side == "buy" else "TTTS1001U"
             elif self.exchange == '심천':
-                tr_id = "TTTS0305U" if side == "buy" else "TTTS0305U"
+                tr_id = "TTTS0305U" if side == "buy" else "TTTS0304U"
             else:
-                tr_id = "TTTS0311U" if side == "buy" else "TTTS0311U"
+                tr_id = "TTTS0311U" if side == "buy" else "TTTS0310U"
 
         exchange_cd = EXCHANGE_CODE3[self.exchange]
 
@@ -1456,14 +1475,15 @@ class KoreaInvestment:
         resp = requests.post(url, headers=headers, data=json.dumps(data))
         return resp.json()
 
-    def fetch_ohlcv_domestic(self, symbol: str, timeframe:str='D',
-                             since:str="", adj_price:bool=True):
+    def fetch_ohlcv_domestic(self, symbol: str, timeframe:str='D', start_day:str="",
+                             end_day:str="", adj_price:bool=True):
         """국내주식시세/국내주식 기간별 시세(일/주/월/년)
 
         Args:
             symbol (str): symbol
             timeframe (str, optional): "D": 일, "W": 주, "M": 월, 'Y': 년
-            since (str, optional): YYYYMMDD
+            start_day (str, optional): 조회시작일자(YYYYMMDD)
+            end_day (str, optional): 조회종료일자(YYYYMMDD)
             adjusted (bool, optional): False: 수정주가 미반영, True: 수정주가 반영
         """
         path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
@@ -1477,19 +1497,18 @@ class KoreaInvestment:
            "tr_id": "FHKST03010100"
         }
 
-        if since == "":
+        if end_day == "":
             now = datetime.datetime.now()
-            since = now.strftime("%Y%m%d")
+            end_day = now.strftime("%Y%m%d")
 
-        delta = datetime.timedelta(days=100)
-        start_day = now - delta
-        start_day = start_day.strftime("%Y%m%d")
+        if start_day == "":
+            start_day = "19800104"
 
         params = {
             "FID_COND_MRKT_DIV_CODE": "J",
             "FID_INPUT_ISCD": symbol,
-            "FID_INPUT_DATE_1": "",
-            "FID_INPUT_DATE_2": since,
+            "FID_INPUT_DATE_1": start_day,
+            "FID_INPUT_DATE_2": end_day,
             "FID_PERIOD_DIV_CODE": timeframe,
             "FID_ORG_ADJ_PRC": 0 if adj_price else 1
         }
@@ -1497,13 +1516,13 @@ class KoreaInvestment:
         return resp.json()
 
     def fetch_ohlcv_overesea(self, symbol: str, timeframe:str='D',
-                             since:str="", adj_price:bool=True):
+                             end_day:str="", adj_price:bool=True):
         """해외주식현재가/해외주식 기간별시세
 
         Args:
             symbol (str): symbol
             timeframe (str, optional): "D": 일, "W": 주, "M": 월
-            since (str, optional): YYYYMMDD
+            end_day (str, optional): 조회종료일자 (YYYYMMDD)
             adjusted (bool, optional): False: 수정주가 미반영, True: 수정주가 반영
         """
         path = "/uapi/overseas-price/v1/quotations/dailyprice"
@@ -1523,9 +1542,9 @@ class KoreaInvestment:
             'M': "2"
         }
 
-        if since == "":
+        if end_day == "":
             now = datetime.datetime.now()
-            since = now.strftime("%Y%m%d")
+            end_day = now.strftime("%Y%m%d")
 
         exchange_code = EXCHANGE_CODE4[self.exchange]
 
@@ -1534,7 +1553,7 @@ class KoreaInvestment:
             "EXCD": exchange_code,
             "SYMB": symbol,
             "GUBN": timeframe_lookup.get(timeframe, "0"),
-            "BYMD": since,
+            "BYMD": end_day,
             "MODP": 1 if adj_price else 0
         }
         resp = requests.get(url, headers=headers, params=params)
