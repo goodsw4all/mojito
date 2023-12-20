@@ -1828,9 +1828,7 @@ class KoreaInvestment:
             "tr_id": "HHKST03900300",
         }
         params = {"user_id": self.user_id}
-
         resp = requests.get(url, headers=headers, params=params)
-        print(json.dumps(resp.json(), indent=4, ensure_ascii=False))
         return resp.json()
 
     def fetch_search_stocks_condition(self, seq="0"):
@@ -1852,11 +1850,7 @@ class KoreaInvestment:
             "tr_id": "HHKST03900400",
         }
         params = {"user_id": self.user_id, "seq": seq}
-
         resp = requests.get(url, headers=headers, params=params)
-        for item in resp.json()["output2"]:
-            print(item["name"])
-        # print(json.dumps(resp.json(), indent=4, ensure_ascii=False))
         return resp.json()
 
 
